@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Palette HSL — neutrals tinted toward blue hue ~214 */
+    --background:           214 20% 99%;
+    --foreground:           214 20% 16%;
+    --card:                 214 25% 99.5%;
+    --card-foreground:      214 20% 16%;
+    --popover:              214 25% 99.5%;
+    --popover-foreground:   214 20% 16%;
+    --primary:              214 89% 52%;
+    --primary-foreground:   0 0% 100%;
+    --secondary:            214 18% 95%;
+    --secondary-foreground: 214 18% 28%;
+    --muted:                214 15% 95%;
+    --muted-foreground:     214 10% 54%;
+    --accent:               214 18% 93%;
+    --accent-foreground:    214 18% 24%;
+    --destructive:          0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border:               214 14% 90%;
+    --input:                214 14% 90%;
+    --ring:                 214 89% 52%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background:           214 18% 10%;
+    --foreground:           214 10% 94%;
+    --card:                 214 16% 13%;
+    --card-foreground:      214 10% 94%;
+    --popover:              214 16% 13%;
+    --popover-foreground:   214 10% 94%;
+    --primary:              214 85% 62%;
+    --primary-foreground:   0 0% 100%;
+    --secondary:            214 14% 18%;
+    --secondary-foreground: 214 10% 88%;
+    --muted:                214 13% 18%;
+    --muted-foreground:     214 8% 62%;
+    --accent:               214 14% 22%;
+    --accent-foreground:    214 10% 88%;
+    --destructive:          0 62% 44%;
+    --destructive-foreground: 0 0% 100%;
+    --border:               214 14% 24%;
+    --input:                214 13% 18%;
+    --ring:                 214 85% 62%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans), sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3 {
+    letter-spacing: -0.015em;
+  }
+}
+
+/* Mobile: constrain to phone width / Desktop: full width */
+.app-container {
+  max-width: 430px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  position: relative;
+}
+
+@media (min-width: 768px) {
+  .app-container {
+    max-width: 100%;
+    box-shadow: none !important;
+  }
+}
+
+/* Safe area for bottom nav */
+.pb-safe {
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 2px;
+}
