@@ -56,13 +56,13 @@ export default function MealForm({
       ingredient_name: i.ingredient_name,
       quantity: i.quantity,
       unit: i.unit as Unit,
-    })) ?? [{ ingredient_name: "", quantity: 100, unit: "g" }]
+    })) ?? [{ ingredient_name: "", quantity: 1, unit: "unit" as Unit }]
   );
 
   const addIngredient = () => {
     setIngredients((prev) => [
       ...prev,
-      { ingredient_name: "", quantity: 100, unit: "g" },
+      { ingredient_name: "", quantity: 1, unit: "unit" as Unit },
     ]);
   };
 

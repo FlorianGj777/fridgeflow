@@ -22,9 +22,11 @@ export default function IngredientInput({
   className,
   autoFocus,
 }: IngredientInputProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen]             = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [dropUp, setDropUp]         = useState(false);
+  const containerRef                = useRef<HTMLDivElement>(null);
+  const inputRef                    = useRef<HTMLInputElement>(null);
 
   const getSuggestions = useCallback(() => {
     const trimmed = value.trim();
@@ -33,7 +35,6 @@ export default function IngredientInput({
     return allIngredients
       .filter((name) => {
         const normName = normalizeIngredientName(name);
-        // Exclure si la valeur est déjà exactement celle-ci
         if (normName === normInput) return false;
         return normName.includes(normInput);
       })
@@ -65,6 +66,32 @@ export default function IngredientInput({
     }
   };
 
+  // Calcule si le dropdown doit s'ouvrir vers le haut (peu d'espace en dessous)
+  const updateDropDirection = useCallback(() => {
+    if (!inputRef.current) return;
+    const rect           = inputRef.current.getBoundingClientRect();
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const spaceBelow     = viewportHeight - rect.bottom;
+    setDropUp(spaceBelow < 220);
+  }, []);
+
+  const handleFocus = () => {
+    updateDropDirection();
+    if (suggestions.length > 0) setOpen(true);
+    // Scroll l'input dans la zone visible après que le clavier mobile soit apparu
+    setTimeout(() => {
+      inputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 320);
+  };
+
+  // Met à jour la direction quand le viewport change (clavier mobile qui s'ouvre/ferme)
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    vv.addEventListener("resize", updateDropDirection);
+    return () => vv.removeEventListener("resize", updateDropDirection);
+  }, [updateDropDirection]);
+
   // Ouvrir/fermer selon les suggestions disponibles
   useEffect(() => {
     setActiveIndex(-1);
@@ -85,17 +112,23 @@ export default function IngredientInput({
   return (
     <div ref={containerRef} className="relative">
       <Input
+        ref={inputRef}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        onFocus={() => suggestions.length > 0 && setOpen(true)}
+        onFocus={handleFocus}
         className={className}
         autoFocus={autoFocus}
         autoComplete="off"
       />
       {open && (
-        <ul className="absolute z-50 top-full mt-1 w-full bg-white border border-border rounded-xl shadow-lg overflow-hidden">
+        <ul
+          className={cn(
+            "absolute z-50 w-full bg-white border border-border rounded-xl shadow-lg overflow-hidden",
+            dropUp ? "bottom-full mb-1" : "top-full mt-1"
+          )}
+        >
           {suggestions.map((name, idx) => (
             <li
               key={name}

@@ -61,7 +61,7 @@ export default function FridgeClient({ initialItems, userId, allIngredients: ing
   );
 
   const openCreate = () => {
-    setEditingItem(null); setName(""); setQuantity(1); setUnit("g"); setShowForm(true);
+    setEditingItem(null); setName(""); setQuantity(1); setUnit("unit"); setShowForm(true);
   };
 
   const openEdit = (item: FridgeItem) => {

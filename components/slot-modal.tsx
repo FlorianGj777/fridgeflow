@@ -23,7 +23,7 @@ interface SlotModalProps {
   slot: "lunch" | "dinner";
   existing?: WeeklyPlan;
   meals: MealWithIngredients[];
-  onSave: (dayIndex: number, slot: "lunch" | "dinner", mealId: string, servings: number) => void;
+  onSave: (dayIndex: number, slot: "lunch" | "dinner", mealId: string, servings: number, existingId?: string) => void;
   onRemove?: () => void;
   onClose: () => void;
 }
@@ -49,7 +49,7 @@ export default function SlotModal({
 
   const handleSave = () => {
     if (!selectedMeal) return;
-    onSave(dayIndex, slot, selectedMeal.id, servings);
+    onSave(dayIndex, slot, selectedMeal.id, servings, existing?.id);
   };
 
   return (
