@@ -67,14 +67,14 @@ export function addDays(date: Date, days: number): Date {
 }
 
 export function formatDate(date: Date): string {
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString("fr-FR", {
     month: "short",
     day: "numeric",
   });
 }
 
 export function formatDateLong(date: Date): string {
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString("fr-FR", {
     weekday: "long",
     month: "long",
     day: "numeric",
