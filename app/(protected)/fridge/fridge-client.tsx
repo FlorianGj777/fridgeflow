@@ -12,10 +12,6 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Plus, Search, Trash2, Pencil, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { displayQuantity, cn } from "@/lib/utils";
@@ -32,7 +28,6 @@ export default function FridgeClient({ initialItems, userId, allIngredients: ing
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<FridgeItem | null>(null);
-  const [deletingItem, setDeletingItem] = useState<FridgeItem | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [name, setName] = useState("");
@@ -108,18 +103,13 @@ export default function FridgeClient({ initialItems, userId, allIngredients: ing
     }
   };
 
-  const handleDelete = async () => {
-    if (!deletingItem) return;
-    setLoading(true);
+  const handleDelete = async (item: FridgeItem) => {
     try {
-      const { error } = await supabase.from("fridge_items").delete().eq("id", deletingItem.id);
+      const { error } = await supabase.from("fridge_items").delete().eq("id", item.id);
       if (error) throw error;
-      setItems((prev) => prev.filter((i) => i.id !== deletingItem.id));
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
     } catch {
       toast.error("Échec de la suppression.");
-    } finally {
-      setLoading(false);
-      setDeletingItem(null);
     }
   };
 
@@ -220,7 +210,7 @@ export default function FridgeClient({ initialItems, userId, allIngredients: ing
                 <Button
                   variant="ghost" size="icon"
                   className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                  onClick={() => setDeletingItem(item)}
+                  onClick={() => handleDelete(item)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -278,25 +268,6 @@ export default function FridgeClient({ initialItems, userId, allIngredients: ing
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deletingItem} onOpenChange={(open) => !open && setDeletingItem(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer cet article ?</AlertDialogTitle>
-            <AlertDialogDescription>
-              &ldquo;{deletingItem?.ingredient_name}&rdquo; sera retiré de votre frigo.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive hover:bg-destructive/90"
-            >
-              Supprimer
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
