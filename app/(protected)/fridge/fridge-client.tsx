@@ -209,7 +209,7 @@ export default function FridgeClient({ initialItems, userId, allIngredients: ing
                   className="w-6 h-6 rounded border text-sm hover:bg-muted flex items-center justify-center transition-colors"
                 >+</button>
               </div>
-              <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                 <Button
                   variant="ghost" size="icon"
                   className="h-7 w-7 text-muted-foreground hover:text-primary"
