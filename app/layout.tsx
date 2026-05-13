@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
+import ServiceWorkerUpdater from "@/components/sw-updater";
 
 const bricolage = Bricolage_Grotesque({
   subsets: ["latin"],
@@ -39,6 +40,7 @@ export default function RootLayout({
         <div className="app-container bg-background shadow-xl shadow-black/5">
           {children}
         </div>
+        <ServiceWorkerUpdater />
         <Toaster
           position="top-center"
           richColors
