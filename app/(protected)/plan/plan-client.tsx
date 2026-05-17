@@ -43,6 +43,17 @@ export default function PlanClient({ initialPlan, meals, userId, initialWeekStar
     if (data) setPlan(data);
   }, [supabase, userId]);
 
+  // Auto-cleanup : supprime les entrées dont le repas n'existe plus
+  // (sécurité supplémentaire si des orphelins se sont créés avant la cascade)
+  useEffect(() => {
+    const mealIds       = new Set(meals.map((m) => m.id));
+    const orphanIds     = plan.filter((p) => !mealIds.has(p.meal_id)).map((p) => p.id);
+    if (orphanIds.length === 0) return;
+    supabase.from("weekly_plan").delete().in("id", orphanIds).then(() => {
+      setPlan((prev) => prev.filter((p) => !orphanIds.includes(p.id)));
+    });
+  }, [meals]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Sync automatique quand l'app redevient visible (changement d'onglet / retour sur l'app)
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -64,8 +75,14 @@ export default function PlanClient({ initialPlan, meals, userId, initialWeekStar
   };
 
   // Retourne TOUS les repas d'un créneau (supporte plusieurs repas par créneau)
+  // Filtre les orphelins : entrées dont le repas a été supprimé
   const getPlanSlots = (dayIndex: number, slot: "lunch" | "dinner") =>
-    plan.filter((p) => p.day_of_week === dayIndex && p.meal_slot === slot);
+    plan.filter(
+      (p) =>
+        p.day_of_week === dayIndex &&
+        p.meal_slot === slot &&
+        meals.some((m) => m.id === p.meal_id)
+    );
 
   const getMeal = (mealId: string) => meals.find((m) => m.id === mealId);
 
@@ -113,12 +130,20 @@ export default function PlanClient({ initialPlan, meals, userId, initialWeekStar
     try {
       const meal = getMeal(planEntry.meal_id);
       if (!meal) throw new Error("Repas introuvable");
+      // Protection contre division par zéro / NaN si meal.servings est invalide
+      if (!meal.servings || meal.servings < 1) throw new Error("Portions invalides");
       const ratio = planEntry.servings_planned / meal.servings;
 
-      await supabase.from("weekly_plan").update({ is_completed: true }).eq("id", planEntry.id);
+      // Marquer le planning comme fait — si ça échoue, on ne touche pas au frigo
+      const { error: planErr } = await supabase
+        .from("weekly_plan").update({ is_completed: true }).eq("id", planEntry.id);
+      if (planErr) throw planErr;
 
+      // Mise à jour du frigo (best-effort : un échec ici ne défait pas le marquage)
       for (const ing of meal.meal_ingredients) {
+        if (!ing.ingredient_name?.trim()) continue;
         const needed   = ing.quantity * ratio;
+        if (!isFinite(needed) || needed <= 0) continue;
         const normName = ing.ingredient_name.toLowerCase().trim();
         const { data: fridgeItems } = await supabase.from("fridge_items").select("*")
           .eq("user_id", userId).ilike("ingredient_name", normName).eq("unit", ing.unit);

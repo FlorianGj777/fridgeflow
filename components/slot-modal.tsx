@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, Trash2, ChefHat } from "lucide-react";
+import { Search, Trash2, ChefHat, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const DAY_NAMES = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
@@ -23,8 +23,8 @@ interface SlotModalProps {
   slot: "lunch" | "dinner";
   existing?: WeeklyPlan;
   meals: MealWithIngredients[];
-  onSave: (dayIndex: number, slot: "lunch" | "dinner", mealId: string, servings: number, existingId?: string) => void;
-  onRemove?: () => void;
+  onSave: (dayIndex: number, slot: "lunch" | "dinner", mealId: string, servings: number, existingId?: string) => void | Promise<void>;
+  onRemove?: () => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -40,20 +40,45 @@ export default function SlotModal({
   const existingMeal = existing ? meals.find((m) => m.id === existing.meal_id) : null;
   const [search, setSearch] = useState("");
   const [selectedMeal, setSelectedMeal] = useState<MealWithIngredients | null>(existingMeal ?? null);
-  const [servings, setServings] = useState(existing?.servings_planned ?? existingMeal?.servings ?? 2);
+  const [servings, setServings] = useState<number>(existing?.servings_planned ?? existingMeal?.servings ?? 2);
+  const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   const filteredMeals = useMemo(
     () => meals.filter((m) => m.name.toLowerCase().includes(search.toLowerCase())),
     [meals, search]
   );
 
-  const handleSave = () => {
-    if (!selectedMeal) return;
-    onSave(dayIndex, slot, selectedMeal.id, servings, existing?.id);
+  const handleSave = async () => {
+    if (!selectedMeal || saving) return;
+    // Protection : portions toujours ≥ 1 et entier (évite divisions par zéro / NaN)
+    const safeServings = Math.max(1, Math.floor(Number(servings) || 1));
+    setSaving(true);
+    try {
+      await onSave(dayIndex, slot, selectedMeal.id, safeServings, existing?.id);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!onRemove || removing) return;
+    setRemoving(true);
+    try {
+      await onRemove();
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const handleServingsChange = (raw: string) => {
+    if (raw === "") { setServings(1); return; }
+    const n = parseInt(raw, 10);
+    if (!isNaN(n) && n >= 1) setServings(n);
   };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={(open) => !open && !saving && !removing && onClose()}>
       <DialogContent className="max-h-[85dvh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
@@ -69,7 +94,6 @@ export default function SlotModal({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
-              autoFocus
             />
           </div>
 
@@ -105,7 +129,14 @@ export default function SlotModal({
               <Label htmlFor="servings">Portions pour ce jour</Label>
               <div className="flex items-center gap-2">
                 <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setServings((s) => Math.max(1, s - 1))}>–</Button>
-                <Input id="servings" type="number" min={1} value={servings} onChange={(e) => setServings(Number(e.target.value))} className="w-16 text-center" />
+                <Input
+                  id="servings"
+                  type="number"
+                  min={1}
+                  value={servings}
+                  onChange={(e) => handleServingsChange(e.target.value)}
+                  className="w-16 text-center"
+                />
                 <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setServings((s) => s + 1)}>+</Button>
                 <span className="text-sm text-muted-foreground">(défaut : {selectedMeal.servings})</span>
               </div>
@@ -115,14 +146,20 @@ export default function SlotModal({
 
         <DialogFooter className="pt-2 gap-2">
           {onRemove && (
-            <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/5 gap-1.5 mr-auto" onClick={onRemove}>
-              <Trash2 className="w-3.5 h-3.5" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive border-destructive/30 hover:bg-destructive/5 gap-1.5 mr-auto"
+              onClick={handleRemove}
+              disabled={saving || removing}
+            >
+              {removing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
               Retirer
             </Button>
           )}
-          <Button variant="outline" onClick={onClose}>Annuler</Button>
-          <Button onClick={handleSave} disabled={!selectedMeal}>
-            {existing ? "Mettre à jour" : "Ajouter au planning"}
+          <Button variant="outline" onClick={onClose} disabled={saving || removing}>Annuler</Button>
+          <Button onClick={handleSave} disabled={!selectedMeal || saving || removing}>
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : existing ? "Mettre à jour" : "Ajouter au planning"}
           </Button>
         </DialogFooter>
       </DialogContent>

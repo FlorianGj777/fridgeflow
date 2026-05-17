@@ -83,6 +83,21 @@ export default function ShoppingClient({
     if (shouldGenerate) handleGenerate();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Sync multi-appareils : recharge la liste de courses quand l'app redevient visible
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState !== "visible") return;
+      const { data } = await supabase
+        .from("shopping_list")
+        .select("*")
+        .eq("user_id", userId)
+        .order("ingredient_name");
+      if (data) setList(data);
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [supabase, userId]);
+
   const handleGenerate = async () => {
     setLoading(true);
     try {
@@ -112,27 +127,42 @@ export default function ShoppingClient({
     if (error) { toast.error("Échec de la mise à jour."); return; }
     setList((prev) => prev.map((i) => (i.id === item.id ? data : i)));
 
-    const existing = fridgeItems.find(
-      (fi) => fi.ingredient_name.toLowerCase() === item.ingredient_name.toLowerCase() && fi.unit === item.unit
-    );
+    // ⚠️ Récupère l'état frigo FRAIS depuis la DB (les props sont stales,
+    // notamment après plusieurs toggles successifs ou si autre appareil)
+    const { data: currentFridge } = await supabase
+      .from("fridge_items")
+      .select("*")
+      .eq("user_id", userId)
+      .ilike("ingredient_name", item.ingredient_name)
+      .eq("unit", item.unit);
 
-    if (newValue) {
-      // Coché → ajouter au frigo
-      if (existing) {
-        await supabase.from("fridge_items").update({ quantity: existing.quantity + item.quantity_needed }).eq("id", existing.id);
-      } else {
-        await supabase.from("fridge_items").insert({ user_id: userId, ingredient_name: item.ingredient_name, quantity: item.quantity_needed, unit: item.unit });
-      }
-    } else {
-      // Décoché → annuler l'ajout au frigo
-      if (existing) {
-        const newQty = existing.quantity - item.quantity_needed;
-        if (newQty <= 0) {
-          await supabase.from("fridge_items").delete().eq("id", existing.id);
+    const existing = currentFridge?.[0];
+
+    try {
+      if (newValue) {
+        // Coché → ajouter au frigo
+        if (existing) {
+          const { error: e } = await supabase.from("fridge_items").update({ quantity: existing.quantity + item.quantity_needed }).eq("id", existing.id);
+          if (e) throw e;
         } else {
-          await supabase.from("fridge_items").update({ quantity: newQty }).eq("id", existing.id);
+          const { error: e } = await supabase.from("fridge_items").insert({ user_id: userId, ingredient_name: item.ingredient_name, quantity: item.quantity_needed, unit: item.unit });
+          if (e) throw e;
+        }
+      } else {
+        // Décoché → annuler l'ajout au frigo
+        if (existing) {
+          const newQty = existing.quantity - item.quantity_needed;
+          if (newQty <= 0) {
+            const { error: e } = await supabase.from("fridge_items").delete().eq("id", existing.id);
+            if (e) throw e;
+          } else {
+            const { error: e } = await supabase.from("fridge_items").update({ quantity: newQty }).eq("id", existing.id);
+            if (e) throw e;
+          }
         }
       }
+    } catch {
+      toast.error("Échec de la mise à jour du frigo.");
     }
   };
 
@@ -161,8 +191,12 @@ export default function ShoppingClient({
   };
 
   const handleAdjustQuantity = async (item: ShoppingListItem, delta: number) => {
-    const step = ["g", "ml"].includes(item.unit) ? 50 : ["kg", "L"].includes(item.unit) ? 0.5 : 1;
-    const newQty = Math.max(step, Math.round((item.quantity_needed + delta * step) * 10) / 10);
+    const isInteger = item.unit === "unit" || item.unit === "pinch";
+    const step      = ["g", "ml"].includes(item.unit) ? 50 : ["kg", "L"].includes(item.unit) ? 0.5 : 1;
+    const target    = item.quantity_needed + delta * step;
+    // Si on descendrait à 0 ou en-dessous, on ne fait rien (l'utilisateur peut supprimer via la corbeille)
+    if (target <= 0) return;
+    const newQty = isInteger ? Math.max(1, Math.round(target)) : Math.round(target * 10) / 10;
     const { data, error } = await supabase
       .from("shopping_list").update({ quantity_needed: newQty }).eq("id", item.id).select().single();
     if (!error && data) setList((prev) => prev.map((i) => (i.id === item.id ? data : i)));
@@ -353,7 +387,7 @@ function ShoppingItemRow({
       <button
         onClick={onToggle}
         className={cn(
-          "w-4.5 h-4.5 w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all",
+          "w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all",
           item.is_purchased ? "bg-primary border-primary" : "border-border hover:border-primary/50"
         )}
       >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { FridgeItem, UNITS, Unit } from "@/types/database";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,21 @@ export default function FridgeClient({ initialItems, userId, allIngredients: ing
   const [unit, setUnit] = useState<Unit>("g");
 
   const supabase = createClient();
+
+  // Sync multi-appareils : recharge le frigo quand l'app redevient visible
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState !== "visible") return;
+      const { data } = await supabase
+        .from("fridge_items")
+        .select("*")
+        .eq("user_id", userId)
+        .order("ingredient_name");
+      if (data) setItems(data);
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [supabase, userId]);
 
   const allIngredients = useMemo(() => {
     const names = new Set<string>([

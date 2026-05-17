@@ -109,6 +109,10 @@ export default function MealsClient({
     if (!deletingMeal) return;
     setLoading(true);
     try {
+      // Supprime d'abord les entrées planning qui référencent ce repas
+      // (évite les orphelins dans le planning après suppression)
+      await supabase.from("weekly_plan").delete().eq("meal_id", deletingMeal.id);
+
       const { error } = await supabase.from("meals").delete().eq("id", deletingMeal.id);
       if (error) throw error;
       setMeals((prev) => prev.filter((m) => m.id !== deletingMeal.id));
