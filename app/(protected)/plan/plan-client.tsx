@@ -5,10 +5,6 @@ import { createClient } from "@/lib/supabase/client";
 import { WeeklyPlan, MealWithIngredients } from "@/types/database";
 import { getWeekStart, formatWeekStartDate, addDays, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { ChevronLeft, ChevronRight, ShoppingCart, Check, Plus } from "lucide-react";
 import { toast } from "sonner";
 import SlotModal from "@/components/slot-modal";
@@ -30,7 +26,6 @@ export default function PlanClient({ initialPlan, meals, userId, initialWeekStar
   const [selectedSlot, setSelectedSlot]     = useState<{ dayIndex: number; slot: "lunch" | "dinner"; existing?: WeeklyPlan } | null>(null);
   const [generatingList, setGeneratingList] = useState(false);
   const [markingDone, setMarkingDone]       = useState<string | null>(null);
-  const [confirmDone, setConfirmDone]       = useState<WeeklyPlan | null>(null);
 
   const supabase     = createClient();
   const weekStartObj = new Date(weekStartDate + "T00:00:00");
@@ -159,7 +154,6 @@ export default function PlanClient({ initialPlan, meals, userId, initialWeekStar
       toast.error("Une erreur est survenue.");
     } finally {
       setMarkingDone(null);
-      setConfirmDone(null);
     }
   };
 
@@ -265,7 +259,7 @@ export default function PlanClient({ initialPlan, meals, userId, initialWeekStar
                                   <span className="text-[10px] bg-muted text-muted-foreground rounded px-1 py-0.5 font-medium">Fait</span>
                                 ) : (
                                   <button
-                                    onClick={() => setConfirmDone(planEntry)}
+                                    onClick={() => handleMarkDone(planEntry)}
                                     disabled={markingDone === planEntry.id}
                                     className="w-5 h-5 rounded border border-border hover:border-primary hover:bg-primary/5 flex items-center justify-center transition-colors flex-shrink-0"
                                     title="Marquer comme fait"
@@ -307,20 +301,6 @@ export default function PlanClient({ initialPlan, meals, userId, initialWeekStar
         />
       )}
 
-      <AlertDialog open={!!confirmDone} onOpenChange={(open) => !open && setConfirmDone(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Marquer comme fait ?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Le repas sera marqué comme terminé et les ingrédients utilisés seront déduits de votre frigo.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <AlertDialogAction onClick={() => handleMarkDone(confirmDone!)}>Confirmer</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
