@@ -38,8 +38,31 @@ export default function PlanClient({
     slot: "lunch" | "dinner";
     existing?: WeeklyPlan;
   } | null>(null);
-  // Jours extras affichés mais sans repas (en attente d'un ajout)
+  // Jours extras affichés mais sans repas — persistés dans localStorage
+  // pour survivre aux refresh / changement d'onglet
   const [pendingExtraDays, setPendingExtraDays] = useState<string[]>([]);
+
+  // Charge les jours extras depuis localStorage au montage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`fridgeflow:extra-days:${userId}`);
+      if (stored) setPendingExtraDays(JSON.parse(stored));
+    } catch {
+      // ignore
+    }
+  }, [userId]);
+
+  // Sauvegarde dans localStorage à chaque changement
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        `fridgeflow:extra-days:${userId}`,
+        JSON.stringify(pendingExtraDays)
+      );
+    } catch {
+      // ignore
+    }
+  }, [pendingExtraDays, userId]);
 
   const supabase = createClient();
 
@@ -136,8 +159,6 @@ export default function PlanClient({
         return;
       }
       setPlan((prev) => [...prev, data]);
-      // Si on a ajouté un repas sur un jour pending, on peut le retirer du pending
-      setPendingExtraDays((prev) => prev.filter((k) => k !== dayKey));
     }
     setSelectedSlot(null);
   };
