@@ -15,6 +15,7 @@ export interface Database {
           email: string;
           display_name: string | null;
           avatar_url: string | null;
+          extra_days: string[];
           created_at: string;
         };
         Insert: {
@@ -22,6 +23,7 @@ export interface Database {
           email: string;
           display_name?: string | null;
           avatar_url?: string | null;
+          extra_days?: string[];
           created_at?: string;
         };
         Update: {
@@ -29,6 +31,7 @@ export interface Database {
           email?: string;
           display_name?: string | null;
           avatar_url?: string | null;
+          extra_days?: string[];
           created_at?: string;
         };
         Relationships: [];

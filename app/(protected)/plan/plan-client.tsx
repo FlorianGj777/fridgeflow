@@ -25,12 +25,14 @@ interface PlanClientProps {
   initialPlan: WeeklyPlan[];
   meals: MealWithIngredients[];
   userId: string;
+  initialExtraDays: string[];
 }
 
 export default function PlanClient({
   initialPlan,
   meals,
   userId,
+  initialExtraDays,
 }: PlanClientProps) {
   const [plan, setPlan] = useState<WeeklyPlan[]>(initialPlan);
   const [selectedSlot, setSelectedSlot] = useState<{
@@ -38,52 +40,41 @@ export default function PlanClient({
     slot: "lunch" | "dinner";
     existing?: WeeklyPlan;
   } | null>(null);
-  // Jours extras affichés mais sans repas — persistés dans localStorage
-  // pour survivre aux refresh / changement d'onglet
-  const [pendingExtraDays, setPendingExtraDays] = useState<string[]>([]);
-
-  // Charge les jours extras depuis localStorage au montage
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(`fridgeflow:extra-days:${userId}`);
-      if (stored) setPendingExtraDays(JSON.parse(stored));
-    } catch {
-      // ignore
-    }
-  }, [userId]);
-
-  // Sauvegarde dans localStorage à chaque changement
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        `fridgeflow:extra-days:${userId}`,
-        JSON.stringify(pendingExtraDays)
-      );
-    } catch {
-      // ignore
-    }
-  }, [pendingExtraDays, userId]);
+  // Jours extras affichés — persistés dans le profil utilisateur (synchronisé multi-appareils)
+  const [pendingExtraDays, setPendingExtraDays] = useState<string[]>(initialExtraDays);
 
   const supabase = createClient();
 
-  // Recharge
-  const refetchPlan = useCallback(async () => {
-    const { data } = await supabase
-      .from("weekly_plan")
-      .select("*")
-      .eq("user_id", userId);
-    if (data) setPlan(data);
+  // Persiste les jours extras dans Supabase à chaque changement
+  const persistExtraDays = useCallback(
+    async (days: string[]) => {
+      await supabase
+        .from("profiles")
+        .update({ extra_days: days })
+        .eq("id", userId);
+    },
+    [supabase, userId]
+  );
+
+  // Recharge planning + extra_days
+  const refetchAll = useCallback(async () => {
+    const [{ data: planData }, { data: profileData }] = await Promise.all([
+      supabase.from("weekly_plan").select("*").eq("user_id", userId),
+      supabase.from("profiles").select("extra_days").eq("id", userId).single(),
+    ]);
+    if (planData) setPlan(planData);
+    if (profileData?.extra_days) setPendingExtraDays(profileData.extra_days);
   }, [supabase, userId]);
 
   // Sync multi-appareils
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") refetchPlan();
+      if (document.visibilityState === "visible") refetchAll();
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () =>
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [refetchPlan]);
+  }, [refetchAll]);
 
   // Auto-cleanup orphelins (repas supprimés)
   useEffect(() => {
@@ -184,12 +175,16 @@ export default function PlanClient({
       await supabase.from("weekly_plan").delete().in("id", ids);
       setPlan((prev) => prev.filter((p) => p.day_key !== dayKey));
     }
-    setPendingExtraDays((prev) => prev.filter((k) => k !== dayKey));
+    const newExtras = pendingExtraDays.filter((k) => k !== dayKey);
+    setPendingExtraDays(newExtras);
+    persistExtraDays(newExtras);
   };
 
   const addExtraDay = (dayKey: string) => {
     if (!pendingExtraDays.includes(dayKey) && !visibleDayKeys.includes(dayKey)) {
-      setPendingExtraDays((prev) => [...prev, dayKey]);
+      const newExtras = [...pendingExtraDays, dayKey];
+      setPendingExtraDays(newExtras);
+      persistExtraDays(newExtras);
     }
   };
 
