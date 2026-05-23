@@ -19,6 +19,7 @@ import { Plus, Search, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import MealForm from "@/components/meal-form";
 import Emoji from "@/components/emoji";
+import { normalizeIngredientName } from "@/lib/utils";
 
 interface MealsClientProps {
   initialMeals: MealWithIngredients[];
@@ -52,6 +53,54 @@ export default function MealsClient({
     }
     return Array.from(names).sort((a, b) => a.localeCompare(b, "fr"));
   }, [meals]);
+
+  // Synchronise les ingrédients du repas vers la liste de courses :
+  // les nouveaux sont ajoutés cochés (en stock), is_manual=false.
+  // Les existants ne sont pas touchés.
+  const syncIngredientsToShoppingList = async (
+    ingredients: { ingredient_name: string; unit: string }[]
+  ) => {
+    if (ingredients.length === 0) return;
+    const { data: existing } = await supabase
+      .from("shopping_list")
+      .select("ingredient_name, unit")
+      .eq("user_id", userId);
+
+    const existingKeys = new Set(
+      (existing || []).map(
+        (item) => `${normalizeIngredientName(item.ingredient_name)}__${item.unit}`
+      )
+    );
+
+    const seenKeys = new Set<string>();
+    const toAdd: {
+      user_id: string;
+      ingredient_name: string;
+      quantity_needed: number;
+      unit: string;
+      is_purchased: boolean;
+      is_manual: boolean;
+    }[] = [];
+
+    for (const ing of ingredients) {
+      if (!ing.ingredient_name?.trim()) continue;
+      const key = `${normalizeIngredientName(ing.ingredient_name)}__${ing.unit}`;
+      if (existingKeys.has(key) || seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      toAdd.push({
+        user_id: userId,
+        ingredient_name: ing.ingredient_name.trim(),
+        quantity_needed: 1,
+        unit: ing.unit,
+        is_purchased: true,
+        is_manual: false,
+      });
+    }
+
+    if (toAdd.length > 0) {
+      await supabase.from("shopping_list").insert(toAdd);
+    }
+  };
 
   const handleSave = async (
     data: Omit<MealWithIngredients, "id" | "user_id" | "created_at">
@@ -95,6 +144,8 @@ export default function MealsClient({
           .from("meals").select("*, meal_ingredients(*)").eq("id", newMeal.id).single();
         setMeals((prev) => [full!, ...prev]);
       }
+      // Sync les nouveaux ingrédients vers la liste de courses (en arrière-plan)
+      syncIngredientsToShoppingList(data.meal_ingredients);
       setShowForm(false);
       setEditingMeal(null);
     } catch {
