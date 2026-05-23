@@ -44,10 +44,14 @@ export default function SlotModal({
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
 
-  const filteredMeals = useMemo(
-    () => meals.filter((m) => m.name.toLowerCase().includes(search.toLowerCase())),
-    [meals, search]
-  );
+  const filteredMeals = useMemo(() => {
+    const filtered = meals.filter((m) => m.name.toLowerCase().includes(search.toLowerCase()));
+    // Met le repas actuellement sélectionné en haut de la liste (utile en édition)
+    if (!selectedMeal) return filtered;
+    const idx = filtered.findIndex((m) => m.id === selectedMeal.id);
+    if (idx <= 0) return filtered;
+    return [filtered[idx], ...filtered.slice(0, idx), ...filtered.slice(idx + 1)];
+  }, [meals, search, selectedMeal]);
 
   const handleSave = async () => {
     if (!selectedMeal || saving) return;
