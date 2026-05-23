@@ -19,6 +19,7 @@ import {
 import { ShoppingCart, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import SlotModal from "@/components/slot-modal";
+import Emoji from "@/components/emoji";
 
 interface PlanClientProps {
   initialPlan: WeeklyPlan[];
@@ -330,9 +331,7 @@ function SlotCell({
               className="flex items-center gap-1.5 w-full text-left hover:text-primary transition-colors"
             >
               {meal.emoji && (
-                <span className="text-base leading-none flex-shrink-0">
-                  {meal.emoji}
-                </span>
+                <Emoji emoji={meal.emoji} size={18} className="flex-shrink-0" />
               )}
               <span className="text-sm font-medium truncate">{meal.name}</span>
               {entry.servings_planned !== meal.servings && (

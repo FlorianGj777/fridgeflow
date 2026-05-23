@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Search, Trash2, ChefHat, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Emoji from "@/components/emoji";
 
 const SLOT_NAMES: Record<string, string> = { lunch: "Midi", dinner: "Soir" };
 
@@ -120,7 +121,7 @@ export default function SlotModal({
                   )}
                 >
                   <div className="font-medium text-sm flex items-center gap-1.5">
-                    {meal.emoji && <span className="text-base leading-none">{meal.emoji}</span>}
+                    {meal.emoji && <Emoji emoji={meal.emoji} size={18} />}
                     <span>{meal.name}</span>
                   </div>
                   <div className="text-xs text-muted-foreground">

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Smile } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Emoji from "@/components/emoji";
 
 // Sélection d'emojis nourriture/cuisine courants
 const FOOD_EMOJIS = [
@@ -46,14 +47,14 @@ export default function EmojiPicker({ value, onChange }: EmojiPickerProps) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          "h-10 w-10 rounded-md border flex items-center justify-center text-xl transition-colors",
+          "h-10 w-10 rounded-md border flex items-center justify-center transition-colors",
           value
             ? "bg-primary/5 border-primary/30 hover:bg-primary/10"
             : "bg-background border-input hover:bg-muted"
         )}
         title={value ? "Changer l'emoji" : "Choisir un emoji"}
       >
-        {value ? value : <Smile className="w-4 h-4 text-muted-foreground" />}
+        {value ? <Emoji emoji={value} size={22} /> : <Smile className="w-4 h-4 text-muted-foreground" />}
       </button>
 
       {open && (
@@ -70,11 +71,11 @@ export default function EmojiPicker({ value, onChange }: EmojiPickerProps) {
                   type="button"
                   onClick={() => handleSelect(emoji)}
                   className={cn(
-                    "h-8 w-8 rounded text-xl flex items-center justify-center hover:bg-muted transition-colors",
+                    "h-8 w-8 rounded flex items-center justify-center hover:bg-muted transition-colors",
                     value === emoji && "bg-primary/10"
                   )}
                 >
-                  {emoji}
+                  <Emoji emoji={emoji} size={20} />
                 </button>
               ))}
             </div>

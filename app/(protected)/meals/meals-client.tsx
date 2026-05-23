@@ -18,6 +18,7 @@ import {
 import { Plus, Search, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import MealForm from "@/components/meal-form";
+import Emoji from "@/components/emoji";
 
 interface MealsClientProps {
   initialMeals: MealWithIngredients[];
@@ -181,7 +182,7 @@ export default function MealsClient({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-2">
                     <h3 className="font-semibold text-sm leading-snug truncate flex items-center gap-1.5">
-                      {meal.emoji && <span className="text-base leading-none">{meal.emoji}</span>}
+                      {meal.emoji && <Emoji emoji={meal.emoji} size={16} />}
                       <span>{meal.name}</span>
                     </h3>
                     <span className="text-xs text-muted-foreground flex-shrink-0">
