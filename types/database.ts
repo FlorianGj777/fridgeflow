@@ -40,6 +40,7 @@ export interface Database {
           name: string;
           description: string | null;
           servings: number;
+          emoji: string | null;
           created_at: string;
         };
         Insert: {
@@ -48,6 +49,7 @@ export interface Database {
           name: string;
           description?: string | null;
           servings?: number;
+          emoji?: string | null;
           created_at?: string;
         };
         Update: {
@@ -56,6 +58,7 @@ export interface Database {
           name?: string;
           description?: string | null;
           servings?: number;
+          emoji?: string | null;
           created_at?: string;
         };
         Relationships: [
@@ -104,32 +107,26 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
-          week_start_date: string;
-          day_of_week: number;
+          day_key: string;
           meal_slot: "lunch" | "dinner";
           meal_id: string;
           servings_planned: number;
-          is_completed: boolean;
         };
         Insert: {
           id?: string;
           user_id: string;
-          week_start_date: string;
-          day_of_week: number;
+          day_key: string;
           meal_slot: "lunch" | "dinner";
           meal_id: string;
           servings_planned?: number;
-          is_completed?: boolean;
         };
         Update: {
           id?: string;
           user_id?: string;
-          week_start_date?: string;
-          day_of_week?: number;
+          day_key?: string;
           meal_slot?: "lunch" | "dinner";
           meal_id?: string;
           servings_planned?: number;
-          is_completed?: boolean;
         };
         Relationships: [
           {
@@ -148,41 +145,6 @@ export interface Database {
           }
         ];
       };
-      fridge_items: {
-        Row: {
-          id: string;
-          user_id: string;
-          ingredient_name: string;
-          quantity: number;
-          unit: string;
-          added_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          ingredient_name: string;
-          quantity: number;
-          unit: string;
-          added_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          ingredient_name?: string;
-          quantity?: number;
-          unit?: string;
-          added_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "fridge_items_user_id_fkey";
-            columns: ["user_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
-          }
-        ];
-      };
       shopping_list: {
         Row: {
           id: string;
@@ -191,7 +153,6 @@ export interface Database {
           quantity_needed: number;
           unit: string;
           is_purchased: boolean;
-          week_start_date: string | null;
           is_manual: boolean;
         };
         Insert: {
@@ -201,7 +162,6 @@ export interface Database {
           quantity_needed: number;
           unit: string;
           is_purchased?: boolean;
-          week_start_date?: string | null;
           is_manual?: boolean;
         };
         Update: {
@@ -211,7 +171,6 @@ export interface Database {
           quantity_needed?: number;
           unit?: string;
           is_purchased?: boolean;
-          week_start_date?: string | null;
           is_manual?: boolean;
         };
         Relationships: [
@@ -240,19 +199,12 @@ export interface Database {
 // Convenience types
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type Meal = Database["public"]["Tables"]["meals"]["Row"];
-export type MealIngredient =
-  Database["public"]["Tables"]["meal_ingredients"]["Row"];
+export type MealIngredient = Database["public"]["Tables"]["meal_ingredients"]["Row"];
 export type WeeklyPlan = Database["public"]["Tables"]["weekly_plan"]["Row"];
-export type FridgeItem = Database["public"]["Tables"]["fridge_items"]["Row"];
-export type ShoppingListItem =
-  Database["public"]["Tables"]["shopping_list"]["Row"];
+export type ShoppingListItem = Database["public"]["Tables"]["shopping_list"]["Row"];
 
 export type MealWithIngredients = Meal & {
   meal_ingredients: MealIngredient[];
-};
-
-export type WeeklyPlanWithMeal = WeeklyPlan & {
-  meal: MealWithIngredients;
 };
 
 export type Unit =
@@ -266,13 +218,3 @@ export type Unit =
   | "pinch";
 
 export const UNITS: Unit[] = ["g", "kg", "ml", "L", "unit", "tbsp", "tsp", "pinch"];
-
-export const DAYS = [
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-  "Sunday",
-];

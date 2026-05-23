@@ -31,7 +31,6 @@ export async function updateSession(request: NextRequest) {
 
   const isProtectedRoute = request.nextUrl.pathname.startsWith("/meals") ||
     request.nextUrl.pathname.startsWith("/plan") ||
-    request.nextUrl.pathname.startsWith("/fridge") ||
     request.nextUrl.pathname.startsWith("/shopping");
 
   if (!user && isProtectedRoute) {

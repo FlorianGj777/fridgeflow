@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { WeeklyPlan, MealWithIngredients } from "@/types/database";
+import { dayKeyLabel } from "@/lib/days";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,21 +16,20 @@ import {
 import { Search, Trash2, ChefHat, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const DAY_NAMES = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
-const SLOT_NAMES: Record<string, string> = { lunch: "Déjeuner", dinner: "Dîner" };
+const SLOT_NAMES: Record<string, string> = { lunch: "Midi", dinner: "Soir" };
 
 interface SlotModalProps {
-  dayIndex: number;
+  dayKey: string;
   slot: "lunch" | "dinner";
   existing?: WeeklyPlan;
   meals: MealWithIngredients[];
-  onSave: (dayIndex: number, slot: "lunch" | "dinner", mealId: string, servings: number, existingId?: string) => void | Promise<void>;
+  onSave: (dayKey: string, slot: "lunch" | "dinner", mealId: string, servings: number, existingId?: string) => void | Promise<void>;
   onRemove?: () => void | Promise<void>;
   onClose: () => void;
 }
 
 export default function SlotModal({
-  dayIndex,
+  dayKey,
   slot,
   existing,
   meals,
@@ -59,7 +59,7 @@ export default function SlotModal({
     const safeServings = Math.max(1, Math.floor(Number(servings) || 1));
     setSaving(true);
     try {
-      await onSave(dayIndex, slot, selectedMeal.id, safeServings, existing?.id);
+      await onSave(dayKey, slot, selectedMeal.id, safeServings, existing?.id);
     } finally {
       setSaving(false);
     }
@@ -86,7 +86,7 @@ export default function SlotModal({
       <DialogContent className="max-h-[85dvh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
-            {DAY_NAMES[dayIndex]} — {SLOT_NAMES[slot]}
+            {dayKeyLabel(dayKey)} — {SLOT_NAMES[slot]}
           </DialogTitle>
         </DialogHeader>
 
@@ -119,7 +119,10 @@ export default function SlotModal({
                       : "border-transparent hover:bg-muted/50"
                   )}
                 >
-                  <div className="font-medium text-sm">{meal.name}</div>
+                  <div className="font-medium text-sm flex items-center gap-1.5">
+                    {meal.emoji && <span className="text-base leading-none">{meal.emoji}</span>}
+                    <span>{meal.name}</span>
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     {meal.servings} portion{meal.servings !== 1 ? "s" : ""} · {meal.meal_ingredients.length} ingrédient{meal.meal_ingredients.length !== 1 ? "s" : ""}
                   </div>

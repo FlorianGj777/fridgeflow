@@ -3,10 +3,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
-  ShoppingListItem, WeeklyPlan, MealWithIngredients, FridgeItem, UNITS, Unit,
+  ShoppingListItem, WeeklyPlan, MealWithIngredients, UNITS, Unit,
 } from "@/types/database";
-import { generateShoppingList } from "@/lib/shopping-logic";
-import { categorizeIngredient, displayQuantity } from "@/lib/utils";
+import { computeNeededIngredients } from "@/lib/shopping-logic";
+import { categorizeIngredient, displayQuantity, normalizeIngredientName, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,12 +20,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ShoppingCart, RefreshCw, Plus, Trash2, Loader2, CheckCheck } from "lucide-react";
+import { RefreshCw, Plus, Trash2, Loader2, CheckCheck } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import IngredientInput from "@/components/ingredient-input";
 
-// Traduction des catégories
 const CATEGORY_FR: Record<string, string> = {
   "Produce": "Fruits & Légumes",
   "Dairy": "Produits laitiers",
@@ -42,14 +40,12 @@ interface ShoppingClientProps {
   initialList: ShoppingListItem[];
   weeklyPlan: WeeklyPlan[];
   meals: MealWithIngredients[];
-  fridgeItems: FridgeItem[];
   userId: string;
-  weekStartDate: string;
   shouldGenerate: boolean;
 }
 
 export default function ShoppingClient({
-  initialList, weeklyPlan, meals, fridgeItems, userId, weekStartDate, shouldGenerate,
+  initialList, weeklyPlan, meals, userId, shouldGenerate,
 }: ShoppingClientProps) {
   const [list, setList] = useState<ShoppingListItem[]>(initialList);
   const [loading, setLoading] = useState(false);
@@ -62,7 +58,7 @@ export default function ShoppingClient({
 
   const supabase = createClient();
 
-  // Agrège les ingrédients connus : repas + frigo + liste de courses (mis à jour automatiquement)
+  // Tous les noms d'ingrédients connus (repas + liste de courses) pour l'autocomplete
   const allIngredients = useMemo(() => {
     const names = new Set<string>();
     for (const meal of meals) {
@@ -70,52 +66,88 @@ export default function ShoppingClient({
         if (ing.ingredient_name.trim()) names.add(ing.ingredient_name.trim());
       }
     }
-    for (const item of fridgeItems) {
-      if (item.ingredient_name.trim()) names.add(item.ingredient_name.trim());
-    }
     for (const item of list) {
       if (item.ingredient_name.trim()) names.add(item.ingredient_name.trim());
     }
     return Array.from(names).sort((a, b) => a.localeCompare(b, "fr"));
-  }, [meals, fridgeItems, list]);
+  }, [meals, list]);
 
+  // Au montage : si l'URL contient ?generate=true, on déclenche la génération
   useEffect(() => {
     if (shouldGenerate) handleGenerate();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync multi-appareils : recharge la liste de courses quand l'app redevient visible
+  // Sync multi-appareils
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState !== "visible") return;
       const { data } = await supabase
-        .from("shopping_list")
-        .select("*")
-        .eq("user_id", userId)
-        .order("ingredient_name");
+        .from("shopping_list").select("*")
+        .eq("user_id", userId).order("ingredient_name");
       if (data) setList(data);
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [supabase, userId]);
 
+  /**
+   * GÉNÉRER :
+   * - Calcule ce dont on a besoin pour la semaine
+   * - Pour chaque ingrédient nécessaire :
+   *    - S'il existe déjà dans la liste : update quantité + décoche
+   *    - S'il n'existe pas : l'ajoute, décoché, avec la quantité nécessaire
+   * - Les autres articles de la liste ne sont pas touchés
+   */
   const handleGenerate = async () => {
     setLoading(true);
     try {
-      const generated = generateShoppingList(weeklyPlan, meals, fridgeItems);
-      await supabase.from("shopping_list").delete().eq("user_id", userId).eq("is_manual", false);
-
-      if (generated.length > 0) {
-        const { data, error } = await supabase.from("shopping_list").insert(
-          generated.map((item) => ({ user_id: userId, ingredient_name: item.ingredient_name, quantity_needed: item.quantity_needed, unit: item.unit, is_purchased: false, week_start_date: weekStartDate, is_manual: false }))
-        ).select();
-        if (error) throw error;
-        setList((prev) => [...prev.filter((i) => i.is_manual), ...(data || [])]);
-      } else {
-        setList((prev) => prev.filter((i) => i.is_manual));
+      const needed = computeNeededIngredients(weeklyPlan, meals);
+      if (needed.length === 0) {
+        toast.error("Aucun repas planifié cette semaine.");
+        return;
       }
 
+      const updatedList = [...list];
+
+      for (const item of needed) {
+        // Trouve dans la liste : match par nom normalisé + unité
+        const idx = updatedList.findIndex((li) =>
+          normalizeIngredientName(li.ingredient_name) === item.normalized_name
+          && li.unit === item.unit
+        );
+
+        if (idx >= 0) {
+          // Existe : update quantité + décoche
+          const { data, error } = await supabase
+            .from("shopping_list")
+            .update({
+              quantity_needed: item.quantity_needed,
+              is_purchased: false,
+            })
+            .eq("id", updatedList[idx].id)
+            .select().single();
+          if (!error && data) updatedList[idx] = data;
+        } else {
+          // N'existe pas : insère, décoché
+          const { data, error } = await supabase
+            .from("shopping_list")
+            .insert({
+              user_id: userId,
+              ingredient_name: item.ingredient_name,
+              quantity_needed: item.quantity_needed,
+              unit: item.unit,
+              is_purchased: false,
+              is_manual: false,
+            })
+            .select().single();
+          if (!error && data) updatedList.push(data);
+        }
+      }
+
+      setList(updatedList);
+      toast.success(`${needed.length} ingrédient${needed.length > 1 ? "s" : ""} à acheter`);
     } catch {
-      toast.error("Échec de la génération de la liste.");
+      toast.error("Échec de la génération.");
     } finally {
       setLoading(false);
     }
@@ -123,47 +155,11 @@ export default function ShoppingClient({
 
   const handleTogglePurchased = async (item: ShoppingListItem) => {
     const newValue = !item.is_purchased;
-    const { data, error } = await supabase.from("shopping_list").update({ is_purchased: newValue }).eq("id", item.id).select().single();
+    const { data, error } = await supabase
+      .from("shopping_list").update({ is_purchased: newValue }).eq("id", item.id)
+      .select().single();
     if (error) { toast.error("Échec de la mise à jour."); return; }
     setList((prev) => prev.map((i) => (i.id === item.id ? data : i)));
-
-    // ⚠️ Récupère l'état frigo FRAIS depuis la DB (les props sont stales,
-    // notamment après plusieurs toggles successifs ou si autre appareil)
-    const { data: currentFridge } = await supabase
-      .from("fridge_items")
-      .select("*")
-      .eq("user_id", userId)
-      .ilike("ingredient_name", item.ingredient_name)
-      .eq("unit", item.unit);
-
-    const existing = currentFridge?.[0];
-
-    try {
-      if (newValue) {
-        // Coché → ajouter au frigo
-        if (existing) {
-          const { error: e } = await supabase.from("fridge_items").update({ quantity: existing.quantity + item.quantity_needed }).eq("id", existing.id);
-          if (e) throw e;
-        } else {
-          const { error: e } = await supabase.from("fridge_items").insert({ user_id: userId, ingredient_name: item.ingredient_name, quantity: item.quantity_needed, unit: item.unit });
-          if (e) throw e;
-        }
-      } else {
-        // Décoché → annuler l'ajout au frigo
-        if (existing) {
-          const newQty = existing.quantity - item.quantity_needed;
-          if (newQty <= 0) {
-            const { error: e } = await supabase.from("fridge_items").delete().eq("id", existing.id);
-            if (e) throw e;
-          } else {
-            const { error: e } = await supabase.from("fridge_items").update({ quantity: newQty }).eq("id", existing.id);
-            if (e) throw e;
-          }
-        }
-      }
-    } catch {
-      toast.error("Échec de la mise à jour du frigo.");
-    }
   };
 
   const handleAddManual = async () => {
@@ -171,12 +167,14 @@ export default function ShoppingClient({
     setLoading(true);
     try {
       const { data, error } = await supabase.from("shopping_list").insert({
-        user_id: userId, ingredient_name: manualName.trim(), quantity_needed: manualQty,
-        unit: manualUnit, is_purchased: false, week_start_date: weekStartDate, is_manual: true,
+        user_id: userId, ingredient_name: manualName.trim(),
+        quantity_needed: manualQty, unit: manualUnit,
+        is_purchased: false, is_manual: true,
       }).select().single();
       if (error) throw error;
       setList((prev) => [...prev, data]);
-      setManualName(""); setManualQty(1); setManualUnit("unit"); setShowAddForm(false);
+      setManualName(""); setManualQty(1); setManualUnit("unit");
+      setShowAddForm(false);
     } catch {
       toast.error("Échec de l'ajout.");
     } finally {
@@ -194,7 +192,6 @@ export default function ShoppingClient({
     const isInteger = item.unit === "unit" || item.unit === "pinch";
     const step      = ["g", "ml"].includes(item.unit) ? 50 : ["kg", "L"].includes(item.unit) ? 0.5 : 1;
     const target    = item.quantity_needed + delta * step;
-    // Si on descendrait à 0 ou en-dessous, on ne fait rien (l'utilisateur peut supprimer via la corbeille)
     if (target <= 0) return;
     const newQty = isInteger ? Math.max(1, Math.round(target)) : Math.round(target * 10) / 10;
     const { data, error } = await supabase
@@ -217,11 +214,12 @@ export default function ShoppingClient({
     }
   };
 
+  // Groupement : non achetés (à acheter) par catégorie + achetés en bas
   const grouped = useMemo(() => {
     const groups: Record<string, ShoppingListItem[]> = {};
-    const unpurchased = list.filter((i) => !i.is_purchased);
+    const toBuy     = list.filter((i) => !i.is_purchased);
     const purchased = list.filter((i) => i.is_purchased);
-    for (const item of unpurchased) {
+    for (const item of toBuy) {
       const cat = categorizeIngredient(item.ingredient_name);
       if (!groups[cat]) groups[cat] = [];
       groups[cat].push(item);
@@ -231,14 +229,18 @@ export default function ShoppingClient({
   }, [list]);
 
   const totalItems = list.length;
-  const purchasedCount = list.filter((i) => i.is_purchased).length;
+  const toBuyCount = list.filter((i) => !i.is_purchased).length;
 
   return (
     <div className="p-4 md:p-6 space-y-4 md:max-w-2xl">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Liste de courses</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{purchasedCount}/{totalItems} articles achetés</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {toBuyCount > 0
+              ? `${toBuyCount} article${toBuyCount > 1 ? "s" : ""} à acheter`
+              : `${totalItems} article${totalItems > 1 ? "s" : ""} en stock`}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowAddForm(true)}>
@@ -254,15 +256,19 @@ export default function ShoppingClient({
 
       {totalItems > 0 && (
         <div className="h-2 bg-muted rounded-full overflow-hidden">
-          <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${(purchasedCount / totalItems) * 100}%` }} />
+          <div
+            className="h-full bg-primary rounded-full transition-all duration-500"
+            style={{ width: `${totalItems > 0 ? ((totalItems - toBuyCount) / totalItems) * 100 : 0}%` }}
+          />
         </div>
       )}
 
       {totalItems === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <p className="font-semibold text-foreground">Liste vide</p>
-          <p className="text-sm text-muted-foreground mt-1 max-w-[220px]">
-            Planifiez vos repas de la semaine et générez votre liste de courses
+          <p className="text-sm text-muted-foreground mt-1 max-w-[240px]">
+            Cliquez sur Générer pour calculer les courses depuis votre planning,
+            ou ajoutez un article manuellement.
           </p>
           <div className="flex gap-2 mt-5">
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowAddForm(true)}>
@@ -277,6 +283,7 @@ export default function ShoppingClient({
         </div>
       ) : (
         <div className="space-y-4">
+          {/* À ACHETER (décochés, groupés par catégorie) */}
           {grouped.groups.map(([category, items]) => (
             <div key={category}>
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
@@ -295,18 +302,22 @@ export default function ShoppingClient({
             </div>
           ))}
 
+          {/* EN STOCK (cochés) */}
           {grouped.purchased.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-2 px-1">
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Achetés ({grouped.purchased.length})
+                  En stock ({grouped.purchased.length})
                 </h3>
-                <button onClick={() => setShowClearConfirm(true)} className="text-xs text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1">
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  className="text-xs text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
+                >
                   <Trash2 className="w-3 h-3" />
-                  Effacer
+                  Tout effacer
                 </button>
               </div>
-              <div className="space-y-2 opacity-60">
+              <div className="space-y-2">
                 {grouped.purchased.map((item) => (
                   <ShoppingItemRow
                     key={item.id} item={item}
@@ -327,12 +338,18 @@ export default function ShoppingClient({
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Nom de l&apos;article</Label>
-              <IngredientInput value={manualName} onChange={setManualName} allIngredients={allIngredients} placeholder="ex. Huile d'olive" autoFocus />
+              <IngredientInput
+                value={manualName}
+                onChange={setManualName}
+                allIngredients={allIngredients}
+                placeholder="ex. Huile d'olive"
+              />
             </div>
             <div className="flex gap-2">
               <div className="flex-1 space-y-1.5">
                 <Label>Quantité</Label>
-                <Input type="number" min={0} step="any" value={manualQty} onChange={(e) => setManualQty(Number(e.target.value))} />
+                <Input type="number" min={0} step="any" value={manualQty}
+                  onChange={(e) => setManualQty(Number(e.target.value))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Unité</Label>
@@ -346,7 +363,7 @@ export default function ShoppingClient({
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddForm(false)}>Annuler</Button>
             <Button onClick={handleAddManual} disabled={loading || !manualName.trim()}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Ajouter à la liste"}
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Ajouter"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -355,9 +372,9 @@ export default function ShoppingClient({
       <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Effacer les articles achetés ?</AlertDialogTitle>
+            <AlertDialogTitle>Effacer les articles en stock ?</AlertDialogTitle>
             <AlertDialogDescription>
-              {grouped.purchased.length} article{grouped.purchased.length !== 1 ? "s" : ""} seront supprimés de la liste. Cette action est irréversible.
+              {grouped.purchased.length} article{grouped.purchased.length !== 1 ? "s" : ""} seront supprimés. Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -383,7 +400,6 @@ function ShoppingItemRow({
       "bg-card border rounded-lg px-3 py-2.5 flex items-center gap-2.5 transition-colors hover:border-primary/20",
       item.is_purchased && "opacity-55"
     )}>
-      {/* Checkbox */}
       <button
         onClick={onToggle}
         className={cn(
@@ -394,7 +410,6 @@ function ShoppingItemRow({
         {item.is_purchased && <CheckCheck className="w-2.5 h-2.5 text-primary-foreground" strokeWidth={3} />}
       </button>
 
-      {/* Nom */}
       <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
         <span className={cn("text-sm font-medium", item.is_purchased && "line-through text-muted-foreground")}>
           {item.ingredient_name}
@@ -406,7 +421,6 @@ function ShoppingItemRow({
         )}
       </div>
 
-      {/* Quantité +/- */}
       <div className="flex items-center gap-1 flex-shrink-0">
         <button
           onClick={() => onAdjust(-1)}
@@ -421,7 +435,6 @@ function ShoppingItemRow({
         >+</button>
       </div>
 
-      {/* Supprimer */}
       <button
         onClick={onDelete}
         className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0 p-1"

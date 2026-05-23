@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import IngredientInput from "@/components/ingredient-input";
+import EmojiPicker from "@/components/emoji-picker";
 
 type IngredientDraft = {
   id?: string;
@@ -48,6 +49,7 @@ export default function MealForm({
   allIngredients,
 }: MealFormProps) {
   const [name, setName] = useState(meal?.name ?? "");
+  const [emoji, setEmoji] = useState<string | null>(meal?.emoji ?? null);
   const [description, setDescription] = useState(meal?.description ?? "");
   const [servings, setServings] = useState(meal?.servings ?? 2);
   const [ingredients, setIngredients] = useState<IngredientDraft[]>(
@@ -98,6 +100,7 @@ export default function MealForm({
 
     onSave({
       name: name.trim(),
+      emoji: emoji || null,
       description: description.trim() || null,
       servings: Number(servings) || 2,
       meal_ingredients: validIngredients,
@@ -112,17 +115,21 @@ export default function MealForm({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Nom */}
+          {/* Emoji + Nom */}
           <div className="space-y-1.5">
             <Label htmlFor="name">Nom du repas *</Label>
-            <Input
-              id="name"
-              placeholder="ex. Pâtes Carbonara"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              autoFocus
-            />
+            <div className="flex gap-2 items-start">
+              <EmojiPicker value={emoji} onChange={setEmoji} />
+              <Input
+                id="name"
+                placeholder="ex. Pâtes Carbonara"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                autoFocus
+                className="flex-1"
+              />
+            </div>
           </div>
 
           {/* Description */}

@@ -22,13 +22,11 @@ import MealForm from "@/components/meal-form";
 interface MealsClientProps {
   initialMeals: MealWithIngredients[];
   userId: string;
-  fridgeIngredients: string[];
 }
 
 export default function MealsClient({
   initialMeals,
   userId,
-  fridgeIngredients,
 }: MealsClientProps) {
   const [meals, setMeals] = useState<MealWithIngredients[]>(initialMeals);
   const [search, setSearch] = useState("");
@@ -45,14 +43,14 @@ export default function MealsClient({
   );
 
   const allIngredients = useMemo(() => {
-    const names = new Set<string>([...fridgeIngredients]);
+    const names = new Set<string>();
     for (const meal of meals) {
       for (const ing of meal.meal_ingredients) {
         if (ing.ingredient_name.trim()) names.add(ing.ingredient_name.trim());
       }
     }
     return Array.from(names).sort((a, b) => a.localeCompare(b, "fr"));
-  }, [meals, fridgeIngredients]);
+  }, [meals]);
 
   const handleSave = async (
     data: Omit<MealWithIngredients, "id" | "user_id" | "created_at">
@@ -62,7 +60,7 @@ export default function MealsClient({
       if (editingMeal) {
         const { error: mealErr } = await supabase
           .from("meals")
-          .update({ name: data.name, description: data.description, servings: data.servings })
+          .update({ name: data.name, emoji: data.emoji, description: data.description, servings: data.servings })
           .eq("id", editingMeal.id);
         if (mealErr) throw mealErr;
 
@@ -81,7 +79,7 @@ export default function MealsClient({
       } else {
         const { data: newMeal, error: mealErr } = await supabase
           .from("meals")
-          .insert({ user_id: userId, name: data.name, description: data.description, servings: data.servings })
+          .insert({ user_id: userId, name: data.name, emoji: data.emoji, description: data.description, servings: data.servings })
           .select().single();
         if (mealErr) throw mealErr;
 
@@ -182,7 +180,10 @@ export default function MealsClient({
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-2">
-                    <h3 className="font-semibold text-sm leading-snug truncate">{meal.name}</h3>
+                    <h3 className="font-semibold text-sm leading-snug truncate flex items-center gap-1.5">
+                      {meal.emoji && <span className="text-base leading-none">{meal.emoji}</span>}
+                      <span>{meal.name}</span>
+                    </h3>
                     <span className="text-xs text-muted-foreground flex-shrink-0">
                       {meal.servings} portion{meal.servings !== 1 ? "s" : ""}
                     </span>
@@ -208,7 +209,7 @@ export default function MealsClient({
                     </div>
                   )}
                 </div>
-                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                   <Button
                     variant="ghost" size="icon"
                     className="h-7 w-7 text-muted-foreground hover:text-primary"

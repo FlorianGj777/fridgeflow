@@ -1,12 +1,5 @@
-import {
-  FridgeItem,
-  MealWithIngredients,
-  WeeklyPlan,
-} from "@/types/database";
-import {
-  normalizeIngredientName,
-  normalizeQuantity,
-} from "@/lib/utils";
+import { MealWithIngredients, WeeklyPlan } from "@/types/database";
+import { normalizeIngredientName, normalizeQuantity } from "@/lib/utils";
 
 interface NeededIngredient {
   ingredient_name: string;
@@ -16,30 +9,35 @@ interface NeededIngredient {
   baseUnit: string;
 }
 
-interface ShoppingItem {
+export interface NeededItem {
   ingredient_name: string;
+  normalized_name: string;
   quantity_needed: number;
   unit: string;
 }
 
-export function generateShoppingList(
+/**
+ * Calcule, à partir du planning + recettes, les quantités totales nécessaires
+ * pour chaque ingrédient. Pas de soustraction du frigo (qui n'existe plus).
+ */
+export function computeNeededIngredients(
   weeklyPlan: WeeklyPlan[],
-  meals: MealWithIngredients[],
-  fridgeItems: FridgeItem[]
-): ShoppingItem[] {
-  // Accumulate needed ingredients by normalized name + base unit
+  meals: MealWithIngredients[]
+): NeededItem[] {
   const needed = new Map<string, NeededIngredient>();
 
   for (const slot of weeklyPlan) {
-    // Ignorer les repas déjà marqués comme terminés
-    if (slot.is_completed) continue;
     const meal = meals.find((m) => m.id === slot.meal_id);
     if (!meal) continue;
+    if (!meal.servings || meal.servings < 1) continue;
 
     const ratio = slot.servings_planned / meal.servings;
 
     for (const ingredient of meal.meal_ingredients) {
+      if (!ingredient.ingredient_name?.trim()) continue;
       const scaledQty = ingredient.quantity * ratio;
+      if (!isFinite(scaledQty) || scaledQty <= 0) continue;
+
       const { quantity: baseQty, baseUnit } = normalizeQuantity(
         scaledQty,
         ingredient.unit
@@ -66,37 +64,18 @@ export function generateShoppingList(
     }
   }
 
-  // Build fridge lookup by normalized name + base unit
-  const fridge = new Map<string, number>();
-  for (const item of fridgeItems) {
-    const normName = normalizeIngredientName(item.ingredient_name);
-    const { quantity: baseQty, baseUnit } = normalizeQuantity(
-      item.quantity,
-      item.unit
-    );
-    const key = `${normName}__${baseUnit}`;
-    fridge.set(key, (fridge.get(key) ?? 0) + baseQty);
+  // Convertit les quantités dans l'unité d'origine
+  const result: NeededItem[] = [];
+  for (const item of needed.values()) {
+    const qty = reverseNormalize(item.baseQuantity, item.unit);
+    result.push({
+      ingredient_name: item.ingredient_name,
+      normalized_name: normalizeIngredientName(item.ingredient_name),
+      quantity_needed: Math.round(qty * 100) / 100,
+      unit: item.unit,
+    });
   }
-
-  // Compute what is missing
-  const shoppingList: ShoppingItem[] = [];
-
-  for (const [key, item] of needed.entries()) {
-    const fridgeQty = fridge.get(key) ?? 0;
-    const missing = Math.max(0, item.baseQuantity - fridgeQty);
-
-    if (missing > 0) {
-      // Convert back from base units to original unit
-      const quantityInOriginalUnit = reverseNormalize(missing, item.unit);
-      shoppingList.push({
-        ingredient_name: item.ingredient_name,
-        quantity_needed: quantityInOriginalUnit,
-        unit: item.unit,
-      });
-    }
-  }
-
-  return shoppingList;
+  return result;
 }
 
 function reverseNormalize(baseQuantity: number, targetUnit: string): number {
@@ -110,7 +89,6 @@ function reverseNormalize(baseQuantity: number, targetUnit: string): number {
     tsp: 5,
     pinch: 0.5,
   };
-
   const factor = UNIT_TO_BASE[targetUnit] ?? 1;
   return baseQuantity / factor;
 }

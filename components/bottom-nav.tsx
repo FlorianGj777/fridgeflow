@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChefHat, Calendar, Refrigerator, ShoppingCart } from "lucide-react";
+import { ChefHat, Calendar, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
   { href: "/meals",    label: "Repas",   icon: ChefHat },
   { href: "/plan",     label: "Semaine", icon: Calendar },
-  { href: "/fridge",   label: "Frigo",   icon: Refrigerator },
   { href: "/shopping", label: "Courses", icon: ShoppingCart },
 ];
 

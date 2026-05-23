@@ -7,25 +7,16 @@ export default async function MealsPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: meals }, { data: fridgeItems }] = await Promise.all([
-    supabase
-      .from("meals")
-      .select("*, meal_ingredients(*)")
-      .eq("user_id", user!.id)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("fridge_items")
-      .select("ingredient_name")
-      .eq("user_id", user!.id),
-  ]);
-
-  const fridgeIngredients = (fridgeItems ?? []).map((i) => i.ingredient_name);
+  const { data: meals } = await supabase
+    .from("meals")
+    .select("*, meal_ingredients(*)")
+    .eq("user_id", user!.id)
+    .order("created_at", { ascending: false });
 
   return (
     <MealsClient
       initialMeals={meals || []}
       userId={user!.id}
-      fridgeIngredients={fridgeIngredients}
     />
   );
 }

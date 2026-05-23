@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChefHat, Calendar, Refrigerator, ShoppingCart, LogOut } from "lucide-react";
+import { ChefHat, Calendar, ShoppingCart, LogOut, Refrigerator } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { Profile } from "@/types/database";
@@ -11,7 +11,6 @@ import Image from "next/image";
 const tabs = [
   { href: "/meals",    label: "Mes Repas",   icon: ChefHat },
   { href: "/plan",     label: "Semaine",     icon: Calendar },
-  { href: "/fridge",   label: "Mon Frigo",   icon: Refrigerator },
   { href: "/shopping", label: "Courses",     icon: ShoppingCart },
 ];
 
