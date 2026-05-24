@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ShoppingCart, Plus, X } from "lucide-react";
+import { ShoppingCart, Plus, X, Check } from "lucide-react";
 import { toast } from "sonner";
 import SlotModal from "@/components/slot-modal";
 import Emoji from "@/components/emoji";
@@ -154,6 +154,25 @@ export default function PlanClient({
     setSelectedSlot(null);
   };
 
+  const handleToggleCompleted = async (planEntry: WeeklyPlan) => {
+    const newValue = !planEntry.is_completed;
+    // Update optimiste
+    setPlan((prev) =>
+      prev.map((p) => (p.id === planEntry.id ? { ...p, is_completed: newValue } : p))
+    );
+    const { error } = await supabase
+      .from("weekly_plan")
+      .update({ is_completed: newValue })
+      .eq("id", planEntry.id);
+    if (error) {
+      // Rollback en cas d'échec
+      setPlan((prev) =>
+        prev.map((p) => (p.id === planEntry.id ? { ...p, is_completed: planEntry.is_completed } : p))
+      );
+      toast.error("Échec de la mise à jour.");
+    }
+  };
+
   const handleSlotRemove = async (planEntry: WeeklyPlan) => {
     const { error } = await supabase
       .from("weekly_plan")
@@ -268,6 +287,7 @@ export default function PlanClient({
                     setSelectedSlot({ dayKey, slot: "lunch", existing: e })
                   }
                   onAdd={() => setSelectedSlot({ dayKey, slot: "lunch" })}
+                  onToggleCompleted={handleToggleCompleted}
                 />
 
                 {/* Soir */}
@@ -279,6 +299,7 @@ export default function PlanClient({
                     setSelectedSlot({ dayKey, slot: "dinner", existing: e })
                   }
                   onAdd={() => setSelectedSlot({ dayKey, slot: "dinner" })}
+                  onToggleCompleted={handleToggleCompleted}
                 />
 
                 {/* spacer for grid */}
@@ -324,12 +345,14 @@ function SlotCell({
   getMeal,
   onSelectExisting,
   onAdd,
+  onToggleCompleted,
 }: {
   label: string;
   entries: WeeklyPlan[];
   getMeal: (id: string) => MealWithIngredients | undefined;
   onSelectExisting: (e: WeeklyPlan) => void;
   onAdd: () => void;
+  onToggleCompleted: (e: WeeklyPlan) => void;
 }) {
   return (
     <div className="flex items-start gap-2 md:gap-0 mt-1.5 md:mt-0">
@@ -341,21 +364,42 @@ function SlotCell({
           const meal = getMeal(entry.meal_id);
           if (!meal) return null;
           return (
-            <button
-              key={entry.id}
-              onClick={() => onSelectExisting(entry)}
-              className="flex items-center gap-1.5 w-full text-left hover:text-primary transition-colors"
-            >
-              {meal.emoji && (
-                <Emoji emoji={meal.emoji} size={18} className="flex-shrink-0" />
-              )}
-              <span className="text-sm font-medium truncate">{meal.name}</span>
-              {entry.servings_planned !== meal.servings && (
-                <span className="text-[10px] text-muted-foreground flex-shrink-0">
-                  ×{entry.servings_planned}
+            <div key={entry.id} className="flex items-center gap-1.5">
+              {/* Case à cocher "mangé" */}
+              <button
+                onClick={() => onToggleCompleted(entry)}
+                className={`w-[16px] h-[16px] rounded border flex items-center justify-center flex-shrink-0 transition-all ${
+                  entry.is_completed
+                    ? "bg-primary border-primary"
+                    : "border-border hover:border-primary/50"
+                }`}
+                title={entry.is_completed ? "Décocher" : "Marquer comme mangé"}
+              >
+                {entry.is_completed && (
+                  <Check className="w-2.5 h-2.5 text-primary-foreground" strokeWidth={3} />
+                )}
+              </button>
+              <button
+                onClick={() => onSelectExisting(entry)}
+                className="flex items-center gap-1.5 flex-1 min-w-0 text-left hover:text-primary transition-colors"
+              >
+                {meal.emoji && (
+                  <Emoji emoji={meal.emoji} size={18} className="flex-shrink-0" />
+                )}
+                <span
+                  className={`text-sm font-medium truncate ${
+                    entry.is_completed ? "line-through text-muted-foreground" : ""
+                  }`}
+                >
+                  {meal.name}
                 </span>
-              )}
-            </button>
+                {entry.servings_planned !== meal.servings && (
+                  <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                    ×{entry.servings_planned}
+                  </span>
+                )}
+              </button>
+            </div>
           );
         })}
         <button

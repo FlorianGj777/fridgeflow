@@ -114,6 +114,7 @@ export interface Database {
           meal_slot: "lunch" | "dinner";
           meal_id: string;
           servings_planned: number;
+          is_completed: boolean;
         };
         Insert: {
           id?: string;
@@ -122,6 +123,7 @@ export interface Database {
           meal_slot: "lunch" | "dinner";
           meal_id: string;
           servings_planned?: number;
+          is_completed?: boolean;
         };
         Update: {
           id?: string;
@@ -130,6 +132,7 @@ export interface Database {
           meal_slot?: "lunch" | "dinner";
           meal_id?: string;
           servings_planned?: number;
+          is_completed?: boolean;
         };
         Relationships: [
           {
