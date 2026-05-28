@@ -20,7 +20,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { RefreshCw, Plus, Trash2, Loader2, CheckCheck } from "lucide-react";
+import { RefreshCw, Plus, Trash2, Loader2, CheckCheck, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import IngredientInput from "@/components/ingredient-input";
 
@@ -51,6 +51,7 @@ export default function ShoppingClient({
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [search, setSearch] = useState("");
 
   const [manualName, setManualName] = useState("");
   const [manualQty, setManualQty] = useState<number>(1);
@@ -215,10 +216,17 @@ export default function ShoppingClient({
   };
 
   // Groupement : non achetés (à acheter) par catégorie + achetés en bas
+  // Filtre selon la recherche (sans accents, insensible à la casse)
   const grouped = useMemo(() => {
+    const searchNorm = normalizeIngredientName(search.trim());
+    const filtered = searchNorm
+      ? list.filter((i) =>
+          normalizeIngredientName(i.ingredient_name).includes(searchNorm)
+        )
+      : list;
     const groups: Record<string, ShoppingListItem[]> = {};
-    const toBuy     = list.filter((i) => !i.is_purchased);
-    const purchased = list.filter((i) => i.is_purchased);
+    const toBuy     = filtered.filter((i) => !i.is_purchased);
+    const purchased = filtered.filter((i) => i.is_purchased);
     for (const item of toBuy) {
       const cat = categorizeIngredient(item.ingredient_name);
       if (!groups[cat]) groups[cat] = [];
@@ -226,7 +234,7 @@ export default function ShoppingClient({
     }
     const sortedGroups = Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
     return { groups: sortedGroups, purchased };
-  }, [list]);
+  }, [list, search]);
 
   const totalItems = list.length;
   const toBuyCount = list.filter((i) => !i.is_purchased).length;
@@ -263,6 +271,27 @@ export default function ShoppingClient({
         </div>
       )}
 
+      {totalItems > 0 && (
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher un article..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 pr-9"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Effacer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
       {totalItems === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <p className="font-semibold text-foreground">Liste vide</p>
@@ -280,6 +309,12 @@ export default function ShoppingClient({
               Générer
             </Button>
           </div>
+        </div>
+      ) : grouped.groups.length === 0 && grouped.purchased.length === 0 ? (
+        <div className="text-center py-10">
+          <p className="text-sm text-muted-foreground">
+            Aucun résultat pour &ldquo;{search}&rdquo;
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
