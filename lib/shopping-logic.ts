@@ -27,6 +27,8 @@ export function computeNeededIngredients(
   const needed = new Map<string, NeededIngredient>();
 
   for (const slot of weeklyPlan) {
+    // Ignore les repas déjà cochés (mangés ou disponibles)
+    if (slot.is_completed) continue;
     const meal = meals.find((m) => m.id === slot.meal_id);
     if (!meal) continue;
     if (!meal.servings || meal.servings < 1) continue;
